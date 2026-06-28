@@ -18,12 +18,12 @@ Simply open run the application, and a local web server will run in the backgrou
 | `GET` | `/now-playing` | Returns the current media state as JSON. |
 | `GET` | `/sessions` | Returns a list of all active media sessions. |
 
-### Data Schema
+### Schema
 The `/now-playing` endpoint provides a real-time snapshot of your active media sessions. Developers can integrate this into their own web widgets using the following JSON structure:
 
 ```json
 {
-  "app_version": "0.0.1",
+  "app_version": "string",
   "current_session_id": "string",
   "sessions": [
     {
@@ -58,6 +58,33 @@ The `/now-playing` endpoint provides a real-time snapshot of your active media s
   ]
 }
 ```
+
+### Enums
+
+#### Playback Status
+| Value | Status | Description |
+| :--- | :--- | :--- |
+| `0` | `CLOSED` | Engine uninitialized or empty |
+| `1` | `OPENED` | Pipeline loaded but idling |
+| `2` | `CHANGING` | Buffering, track skipping, or seeking |
+| `3` | `STOPPED` | Track queued but fully stopped |
+| `4` | `PLAYING` | Audio actively streaming |
+| `5` | `PAUSED` | Audio frozen |
+
+#### Playback Type
+| Value | Type | Description |
+| :--- | :--- | :--- |
+| `0` | `UNKNOWN` | Generic audio wrapper |
+| `1` | `MUSIC` | Pure audio pipeline (Spotify, iTunes, etc.) |
+| `2` | `VIDEO` | Visual media feed (YouTube, Twitch, etc.) |
+| `3` | `IMAGE` | Static slideshow presentation hook |
+
+#### Auto Repeat Mode
+| Value | Mode | Description |
+| :--- | :--- | :--- |
+| `0` | `NONE` | Plays queue through and terminates |
+| `1` | `TRACK` | Single active song looping |
+| `2` | `LIST` | Parent playlist/album looping |
 
 ## Credits
 Built and maintained by **nutty**. 
