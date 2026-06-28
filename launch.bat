@@ -1,0 +1,1 @@
+python .\smtc-bridge.pyw

@@ -1,0 +1,7 @@
+flask
+flask-cors
+psutil
+pystray
+Pillow
+plyer
+winsdk
