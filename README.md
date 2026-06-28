@@ -6,14 +6,13 @@ This tool allows developers to easily create their own "Now Playing" widgets tha
 
 Simply run the application, and a local web server will run in the background, accessible via [http://127.0.0.1:5000/now-playing/](http://127.0.0.1:5000/now-playing/)
 
+A ready-to-use "Now Playing" widget utilizing SMTC Bridge is available to try here:<br>
+**[https://widgets.nutty.gg/now-playing/settings/](https://widgets.nutty.gg/now-playing/settings/)**
+
 ## Quick Start
 1. Download the latest `.exe` from the [Releases page](releases).
 2. Run the application — a tray icon will appear.
 3. Right-click the icon to view the API.
-
-A ready-to-use "Now Playing" widget utilizing SMTC Bridge is available to use here:
-
-**[https://beta.nutty.gg/now-playing/settings/](https://beta.nutty.gg/now-playing/settings/)**
 
 ### Endpoints
 
