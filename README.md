@@ -12,6 +12,7 @@ Simply open run the application, and a local web server will run in the backgrou
 3. Right-click the icon to view the API.
 
 A ready-to-use "Now Playing" widget utilizing SMTC Bridge is available to use here:
+
 **[https://beta.nutty.gg/now-playing/settings/](https://beta.nutty.gg/now-playing/settings/)**
 
 ### Endpoints
