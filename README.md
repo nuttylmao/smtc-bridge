@@ -1,10 +1,10 @@
 # SMTC Bridge
 
-SMTC Bridge was designed to expose Windows *System Media Transport Controls (SMTC)* as a clean REST API.
+SMTC Bridge was designed to expose Windows ***System Media Transport Controls (SMTC)*** as a clean REST API.
 
-This was designed for developers to easily create their own "Now Playing" widgets that work with anything supported by SMTC, bypassing the complicated API limitations imposed by streaming platforms (fuck you Spotify).
+This lightweight system tray application allows evelopers can easily create their own "Now Playing" widgets that work with anything supported by SMTC, bypassing the complex API limitations imposed by streaming platforms (fuck you Spotify).
 
-Simply open run the system tray application, and a local web server will run in the background, accessible at `http://127.0.0.1:5000/now-playing/`
+Simply open run the application, and a local web server will run in the background, accessible via `http://127.0.0.1:5000/now-playing/`
 
 ### Endpoints
 
