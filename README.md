@@ -11,13 +11,13 @@ Simply open run the system tray application, and a local web server will run in 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/now-playing` | Returns the current media state as JSON. |
-| `GET` | `/sessions` | Returns a diagnostic list of all active media sessions. |
+| `GET` | `/sessions` | Returns a list of all active media sessions. |
 
 ## Quick Start
-1. Download the latest `.exe` from the [Releases page](#).
-2. Run the application; a tray icon will appear.
-3. Right-click the icon to view the API data or manage your settings.
+1. Download the latest `.exe` from the [Releases page](releases).
+2. Run the application — a tray icon will appear.
+3. Right-click the icon to view the API.
 
 ## Credits
 Built and maintained by **nutty**. 
-[Check out my other stream widgets here!](https://nutty.gg/collections/member-exclusive-widgets)
+[Check out my other stream widgets here!](https://nutty.gg/)
