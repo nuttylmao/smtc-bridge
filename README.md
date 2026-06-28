@@ -4,7 +4,8 @@ SMTC Bridge is a lightweight system tray application that exposes Windows ***Sys
 
 This tool allows developers to easily create their own "Now Playing" widgets that work with anything supported by SMTC, bypassing the complex API limitations imposed by streaming platforms (fuck you Spotify).
 
-Simply run the application, and a local web server will run in the background, accessible via [http://127.0.0.1:5000/now-playing/](http://127.0.0.1:5000/now-playing/)
+Simply run the application, and a local web server will run in the background. It can be accessed here:<br>
+[http://127.0.0.1:5000/now-playing/](http://127.0.0.1:5000/now-playing/)
 
 A ready-to-use "Now Playing" widget utilizing SMTC Bridge is available to try here:<br>
 **[https://widgets.nutty.gg/now-playing/settings/](https://widgets.nutty.gg/now-playing/settings/)**
