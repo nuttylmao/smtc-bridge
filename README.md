@@ -4,7 +4,7 @@ SMTC Bridge is a lightweight system tray application that exposes Windows ***Sys
 
 This tool allows developers to easily create their own "Now Playing" widgets that work with anything supported by SMTC, bypassing the complex API limitations imposed by streaming platforms (fuck you Spotify).
 
-Simply open run the application, and a local web server will run in the background, accessible via `http://127.0.0.1:5000/now-playing/`
+Simply run the application, and a local web server will run in the background, accessible via `http://127.0.0.1:5000/now-playing/`
 
 ## Quick Start
 1. Download the latest `.exe` from the [Releases page](releases).
