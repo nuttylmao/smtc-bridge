@@ -392,7 +392,7 @@ try:
             pystray.MenuItem("View Data (JSON)", lambda: webbrowser.open(f"http://{HOST}:{PORT}/now-playing")),
             pystray.MenuItem("View Active Sessions", lambda: webbrowser.open(f"http://{HOST}:{PORT}/sessions")),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("★ Customize Overlay", lambda: webbrowser.open(f"https://www.nutty.gg/now-playing/settings/")),
+            pystray.MenuItem("★ Customize Overlay", lambda: webbrowser.open(f"https://widgets.nutty.gg/now-playing/settings/")),
             pystray.MenuItem("★ Try my stream widgets!", lambda: webbrowser.open(f"https://nutty.gg/collections/member-exclusive-widgets")),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", on_quit)
