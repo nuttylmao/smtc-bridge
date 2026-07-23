@@ -1,5 +1,5 @@
 # Versioning
-APP_VERSION = "0.0.1"
+APP_VERSION = "0.0.2"
 DEVELOPER = "nutty"
 
 
@@ -262,29 +262,52 @@ try:
                     "Thumbnail": None 
                 }
 
-                # Add the album art (i.e. "Thumbnail") as a Base64 string.
-                # We will cache this so we don't have to read it every single call.
-                # Use the track title and artist as the key -> {title} - {artist}
+                # CACHE THE THUMBNAIL, DON'T ENCODE IT EVERY TIME, IT'S SLOW AS FUCK
+                # # Add the album art (i.e. "Thumbnail") as a Base64 string.
+                # # We will cache this so we don't have to read it every single call.
+                # # Use the track title and artist as the key -> {title} - {artist}
                 
-                # Build the key
-                title = raw_media.title if raw_media else "Unknown"
-                artist = raw_media.artist if raw_media else "Unknown"
-                track_key = f"{title} - {artist}"
+                # # Build the key
+                # title = raw_media.title if raw_media else "Unknown"
+                # artist = raw_media.artist if raw_media else "Unknown"
+                # track_key = f"{title} - {artist}"
                 
-                # Check if the album art is cached.
-                # If yes:
-                #       - Retrieve it from the cache.
-                #       - Add it to the payload
-                if app_id in ARTWORK_CACHE and ARTWORK_CACHE[app_id]["track_key"] == track_key:
-                    media_data["Thumbnail"] = ARTWORK_CACHE[app_id]["base64"]
+                # # Check if the album art is cached.
+                # # If yes:
+                # #       - Retrieve it from the cache.
+                # #       - Add it to the payload
+                # if app_id in ARTWORK_CACHE and ARTWORK_CACHE[app_id]["track_key"] == track_key:
+                #     media_data["Thumbnail"] = ARTWORK_CACHE[app_id]["base64"]
                 
-                # If not
-                #       - Read the Base64 string
-                #       - Cache the Base64 string
-                #       - Add it to the payload
-                elif raw_media and raw_media.thumbnail:
+                # # If not
+                # #       - Read the Base64 string
+                # #       - Cache the Base64 string
+                # #       - Add it to the payload
+                # elif raw_media and raw_media.thumbnail:
+                #     try:
+                #         # Read the Base64 string
+                #         stream_ref = raw_media.thumbnail
+                #         stream = await stream_ref.open_read_async()
+                #         reader = DataReader(stream.get_input_stream_at(0))
+                #         await reader.load_async(stream.size)
+                #         buffer = bytearray(stream.size)
+                #         reader.read_bytes(buffer)
+                        
+                #         img = Image.open(io.BytesIO(buffer))
+                #         base64_art = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
+                        
+                #         # Cache the Base64 string
+                #         ARTWORK_CACHE[app_id] = {"track_key": track_key, "base64": base64_art}
+                        
+                #         # Add it to the payload
+                #         media_data["Thumbnail"] = base64_art
+                #     except Exception:
+                #         pass                
+
+                # Read the Base64 string
+                base64_art = None
+                if raw_media and raw_media.thumbnail:
                     try:
-                        # Read the Base64 string
                         stream_ref = raw_media.thumbnail
                         stream = await stream_ref.open_read_async()
                         reader = DataReader(stream.get_input_stream_at(0))
@@ -294,14 +317,12 @@ try:
                         
                         img = Image.open(io.BytesIO(buffer))
                         base64_art = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
-                        
-                        # Cache the Base64 string
-                        ARTWORK_CACHE[app_id] = {"track_key": track_key, "base64": base64_art}
-                        
-                        # Add it to the payload
-                        media_data["Thumbnail"] = base64_art
                     except Exception:
-                        pass
+                        # Fallback if the stream fails to open or read
+                        base64_art = None
+
+                # Add it to the payload
+                media_data["Thumbnail"] = base64_art
 
                 # Finally, assemble all the data into a session object, and add it to the session list
                 sessions_list.append({
