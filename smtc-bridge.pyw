@@ -1,5 +1,5 @@
 # Versioning
-APP_VERSION = "0.0.2"
+APP_VERSION = "0.0.3"
 DEVELOPER = "nutty"
 
 
@@ -62,6 +62,7 @@ try:
     import pystray
     import webbrowser
     import configparser
+    import time
     from PIL import Image
     from flask import Flask, jsonify
     from flask_cors import CORS
@@ -146,7 +147,11 @@ try:
 
     app = Flask(__name__)
     CORS(app)
-    ARTWORK_CACHE = {}
+
+    # Create a local temp directory for thumbnails
+    THUMB_DIR = os.path.join(tempfile.gettempdir(), 'smtc_bridge_thumbs')
+    if not os.path.exists(THUMB_DIR):
+        os.makedirs(THUMB_DIR)
 
 
 
@@ -154,9 +159,7 @@ try:
     ### CORE FUNCTIONS ###
     ######################
 
-    async def get_all_media_info():
-        global ARTWORK_CACHE
-            
+    async def get_all_media_info():            
         try:
             # Instantiate the SMTC manager -> This allows use to "talk" to the Windows Media API
             manager = await SMTC.request_async()
@@ -262,50 +265,8 @@ try:
                     "Thumbnail": None 
                 }
 
-                # CACHE THE THUMBNAIL, DON'T ENCODE IT EVERY TIME, IT'S SLOW AS FUCK
-                # # Add the album art (i.e. "Thumbnail") as a Base64 string.
-                # # We will cache this so we don't have to read it every single call.
-                # # Use the track title and artist as the key -> {title} - {artist}
-                
-                # # Build the key
-                # title = raw_media.title if raw_media else "Unknown"
-                # artist = raw_media.artist if raw_media else "Unknown"
-                # track_key = f"{title} - {artist}"
-                
-                # # Check if the album art is cached.
-                # # If yes:
-                # #       - Retrieve it from the cache.
-                # #       - Add it to the payload
-                # if app_id in ARTWORK_CACHE and ARTWORK_CACHE[app_id]["track_key"] == track_key:
-                #     media_data["Thumbnail"] = ARTWORK_CACHE[app_id]["base64"]
-                
-                # # If not
-                # #       - Read the Base64 string
-                # #       - Cache the Base64 string
-                # #       - Add it to the payload
-                # elif raw_media and raw_media.thumbnail:
-                #     try:
-                #         # Read the Base64 string
-                #         stream_ref = raw_media.thumbnail
-                #         stream = await stream_ref.open_read_async()
-                #         reader = DataReader(stream.get_input_stream_at(0))
-                #         await reader.load_async(stream.size)
-                #         buffer = bytearray(stream.size)
-                #         reader.read_bytes(buffer)
-                        
-                #         img = Image.open(io.BytesIO(buffer))
-                #         base64_art = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
-                        
-                #         # Cache the Base64 string
-                #         ARTWORK_CACHE[app_id] = {"track_key": track_key, "base64": base64_art}
-                        
-                #         # Add it to the payload
-                #         media_data["Thumbnail"] = base64_art
-                #     except Exception:
-                #         pass                
-
-                # Read the Base64 string
-                base64_art = None
+                # Read and save thumbnail to a local temp file with byte-hashing cache
+                thumb_url = None
                 if raw_media and raw_media.thumbnail:
                     try:
                         stream_ref = raw_media.thumbnail
@@ -315,14 +276,43 @@ try:
                         buffer = bytearray(stream.size)
                         reader.read_bytes(buffer)
                         
-                        img = Image.open(io.BytesIO(buffer))
-                        base64_art = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
+                        # Generate a safe filename based on the app_id
+                        safe_app_id = "".join(c for c in app_id if c.isalnum() or c in ('_', '-'))
+                        thumb_filename = f"{safe_app_id}.jpg"
+                        thumb_path = os.path.join(THUMB_DIR, thumb_filename)
+                        
+                        # Hash the raw image bytes to check if the artwork actually changed
+                        import hashlib
+                        img_hash = hashlib.md5(buffer).hexdigest()
+                        
+                        # Track hashes in memory to avoid writing to disk if nothing changed
+                        if not hasattr(get_all_media_info, "cache"):
+                            get_all_media_info.cache = {}
+                        
+                        # Check if we already processed this exact artwork for this app
+                        if get_all_media_info.cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
+                            # Artwork hasn't changed, reuse existing file and version timestamp
+                            pass
+                        else:
+                            # Process and save with Pillow only when bytes actually change
+                            img = Image.open(io.BytesIO(buffer))
+                            if img.mode in ("RGBA", "P"):
+                                img = img.convert("RGB")
+                            img.save(thumb_path, "JPEG", quality=50)
+                            
+                            # Update cache hash
+                            get_all_media_info.cache[safe_app_id] = img_hash
+                        
+                        # Use file modification time as the version token so browsers cache it aggressively
+                        thumb_version = int(os.path.getmtime(thumb_path) * 1000)
+                        
+                        # Construct the URL with the version query parameter
+                        thumb_url = f"http://{HOST}:{PORT}/artwork/{safe_app_id}?v={thumb_version}"
                     except Exception:
-                        # Fallback if the stream fails to open or read
-                        base64_art = None
+                        thumb_url = None
 
-                # Add it to the payload
-                media_data["Thumbnail"] = base64_art
+                # Add the local URL to the payload
+                media_data["Thumbnail"] = thumb_url
 
                 # Finally, assemble all the data into a session object, and add it to the session list
                 sessions_list.append({
@@ -346,6 +336,12 @@ try:
     #################
     ### ENDPOINTS ###
     #################
+
+    @app.route('/artwork/<app_identifier>')
+    def serve_artwork(app_identifier):
+        from flask import send_from_directory
+        # Serve the cached thumbnail directly from the temp directory
+        return send_from_directory(THUMB_DIR, f"{app_identifier}.jpg")
 
     @app.route('/now-playing')
     def now_playing():
