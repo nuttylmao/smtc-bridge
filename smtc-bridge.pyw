@@ -298,7 +298,15 @@ try:
                             img = Image.open(io.BytesIO(buffer))
                             if img.mode in ("RGBA", "P"):
                                 img = img.convert("RGB")
-                            img.save(thumb_path, "JPEG", quality=50)
+
+                            # Save at full resolution, but use faster compression settings
+                            img.save(
+                                thumb_path, 
+                                "JPEG", 
+                                quality=40,          # Sweet spot for small size / high visual fidelity
+                                subsampling=2,       # Faster compression algorithm for low-end CPUs
+                                optimize=False       # Skips the extra CPU pass
+                            )
                             
                             # Update cache hash
                             get_all_media_info.cache[safe_app_id] = img_hash
