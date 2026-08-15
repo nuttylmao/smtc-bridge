@@ -1,5 +1,5 @@
 # Versioning
-APP_VERSION = "0.0.4"
+APP_VERSION = "0.0.5"
 DEVELOPER = "nutty"
 
 
@@ -161,6 +161,22 @@ try:
 
     async def get_all_media_info():            
         try:
+            # We will cache the last execution time and payload to avoid redundant parsing if requests flood in faster than 1 second.
+            current_time = time.time()
+            if not hasattr(get_all_media_info, "last_execution"):
+                get_all_media_info.last_execution = 0
+                get_all_media_info.last_payload = None
+
+            # If requests flood in faster than 1 second, return the cached result 
+            # to completely spare the CPU from redundant parsing.
+            if (current_time - get_all_media_info.last_execution) < 1.0 and get_all_media_info.last_payload:
+                # print("Using cached media info.")
+                return get_all_media_info.last_payload
+            # else:
+            #     print("Fetching fresh media info.")
+            
+            get_all_media_info.last_execution = current_time
+
             # Instantiate the SMTC manager -> This allows use to "talk" to the Windows Media API
             manager = await SMTC.request_async()
             
@@ -271,51 +287,56 @@ try:
                     try:
                         stream_ref = raw_media.thumbnail
                         stream = await stream_ref.open_read_async()
-                        reader = DataReader(stream.get_input_stream_at(0))
-                        await reader.load_async(stream.size)
-                        buffer = bytearray(stream.size)
-                        reader.read_bytes(buffer)
-                        
-                        # Generate a safe filename based on the app_id
-                        safe_app_id = "".join(c for c in app_id if c.isalnum() or c in ('_', '-'))
-                        thumb_filename = f"{safe_app_id}.jpg"
-                        thumb_path = os.path.join(THUMB_DIR, thumb_filename)
-                        
-                        # Hash the raw image bytes to check if the artwork actually changed
-                        import hashlib
-                        img_hash = hashlib.md5(buffer).hexdigest()
-                        
-                        # Track hashes in memory to avoid writing to disk if nothing changed
-                        if not hasattr(get_all_media_info, "cache"):
-                            get_all_media_info.cache = {}
-                        
-                        # Check if we already processed this exact artwork for this app
-                        if get_all_media_info.cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
-                            # Artwork hasn't changed, reuse existing file and version timestamp
-                            pass
-                        else:
-                            # Process and save with Pillow only when bytes actually change
-                            img = Image.open(io.BytesIO(buffer))
-                            if img.mode in ("RGBA", "P"):
-                                img = img.convert("RGB")
 
-                            # Save at full resolution, but use faster compression settings
-                            img.save(
-                                thumb_path, 
-                                "JPEG", 
-                                quality=40,          # Sweet spot for small size / high visual fidelity
-                                subsampling=2,       # Faster compression algorithm for low-end CPUs
-                                optimize=False       # Skips the extra CPU pass
-                            )
+                        # Only proceed if there's actual data to read
+                        if stream.size > 0:
+                            reader = DataReader(stream.get_input_stream_at(0))
+                            await reader.load_async(stream.size)
+                            buffer = bytearray(stream.size)
+                            reader.read_bytes(buffer)
                             
-                            # Update cache hash
-                            get_all_media_info.cache[safe_app_id] = img_hash
-                        
-                        # Use file modification time as the version token so browsers cache it aggressively
-                        thumb_version = int(os.path.getmtime(thumb_path) * 1000)
-                        
-                        # Construct the URL with the version query parameter
-                        thumb_url = f"http://{HOST}:{PORT}/artwork/{safe_app_id}?v={thumb_version}"
+                            # Generate a safe filename based on the app_id
+                            safe_app_id = "".join(c for c in app_id if c.isalnum() or c in ('_', '-'))
+                            thumb_filename = f"{safe_app_id}.jpg"
+                            thumb_path = os.path.join(THUMB_DIR, thumb_filename)
+                            
+                            # Hash the raw image bytes to check if the artwork actually changed
+                            import hashlib
+                            img_hash = hashlib.md5(buffer).hexdigest()
+                            
+                            # Track hashes in memory to avoid writing to disk if nothing changed
+                            if not hasattr(get_all_media_info, "cache"):
+                                get_all_media_info.cache = {}
+                            
+                            # Check if we already processed this exact artwork for this app
+                            if get_all_media_info.cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
+                                # Artwork hasn't changed, reuse existing file and version timestamp
+                                # print("Using cached artwork.")
+                                pass
+                            else:
+                                print(f"Processing new artwork for: {media_data['Artist']} - {media_data['Title']}")
+                                # Process and save with Pillow only when bytes actually change
+                                img = Image.open(io.BytesIO(buffer))
+                                if img.mode in ("RGBA", "P"):
+                                    img = img.convert("RGB")
+
+                                # Save at full resolution, but use faster compression settings
+                                img.save(
+                                    thumb_path, 
+                                    "JPEG", 
+                                    quality=40,          # Sweet spot for small size / high visual fidelity
+                                    subsampling=2,       # Faster compression algorithm for low-end CPUs
+                                    optimize=False       # Skips the extra CPU pass
+                                )
+                                
+                                # Update cache hash
+                                get_all_media_info.cache[safe_app_id] = img_hash
+                            
+                            # Use file modification time as the version token so browsers cache it aggressively
+                            thumb_version = int(os.path.getmtime(thumb_path) * 1000)
+                            
+                            # Construct the URL with the version query parameter
+                            thumb_url = f"http://{HOST}:{PORT}/artwork/{safe_app_id}?v={thumb_version}"
                     except Exception:
                         thumb_url = None
 
@@ -331,11 +352,16 @@ try:
                 })
             
             # Build the final payload
-            return {
+            payload = {
                 "app_version": APP_VERSION,
                 "current_session_id": current_session_id, 
                 "sessions": sessions_list
             }
+            
+            # Save to global payload cache
+            get_all_media_info.last_payload = payload
+            return payload
+
         except Exception as e:
             return {"current_session_id": None, "sessions": [], "error": str(e)}
 
