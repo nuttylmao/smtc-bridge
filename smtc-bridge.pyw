@@ -63,6 +63,7 @@ try:
     import webbrowser
     import configparser
     import time
+    import platform
     from PIL import Image
     from flask import Flask, jsonify
     from flask_cors import CORS
@@ -159,44 +160,66 @@ try:
     ### CORE FUNCTIONS ###
     ######################
 
+    # Cache variables for the SMTC manager and rate limiting
+    smtc_manager = None
+    last_execution_time = 0.0
+    last_payload = None
+    album_art_cache = {}
+
     async def get_all_media_info():            
         try:
             # We will cache the last execution time and payload to avoid redundant parsing if requests flood in faster than 1 second.
             current_time = time.time()
-            if not hasattr(get_all_media_info, "last_execution"):
-                get_all_media_info.last_execution = 0
-                get_all_media_info.last_payload = None
+            global smtc_manager, last_execution_time, last_payload, album_art_cache
 
             # If requests flood in faster than 1 second, return the cached result 
             # to completely spare the CPU from redundant parsing.
-            if (current_time - get_all_media_info.last_execution) < 1.0 and get_all_media_info.last_payload:
+            if (current_time - last_execution_time) < 1.0 and last_payload:
                 # print("Using cached media info.")
-                return get_all_media_info.last_payload
+                return last_payload
             # else:
             #     print("Fetching fresh media info.")
             
-            get_all_media_info.last_execution = current_time
+            last_execution_time = current_time
 
             # Instantiate the SMTC manager -> This allows use to "talk" to the Windows Media API
-            manager = await SMTC.request_async()
+            # Reuse the manager if we already have it, otherwise request it once
+            if not smtc_manager:
+                print("Instantiating new SMTC manager...")
+                smtc_manager = await SMTC.request_async()
+
+            manager = smtc_manager
             
             # If it returns null, then no media is playing, or something fucked up and I have no
             # idea what to do, so just return an empty session list
             if not manager:
                 return {"current_session_id": None, "sessions": []}
 
-            # This is the session for the current media player -> Whatever Windows deems is "in focus"
-            # will be the current session.
+            # current_focused:  This is the session for the current media player -> Whatever Windows deems is "in focus"
+            #                   will be the current session.
+            # all_sessions:     We will also get all sessions, not just the current session.
+            #                   This will provide the client with all the necessary info if they want to target just one application.
             # We will store the SourceAppUserModelId, which we all add to the final payload.
             # For all available properties/methods/events, see the official docs:
             # https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssession?view=winrt-28000
-            current_focused = manager.get_current_session()
+            
+            # Try to pull sessions using the cached manager
+            try:
+                current_focused = manager.get_current_session()
+                all_sessions = manager.get_sessions()
+            except Exception:
+                # If the COM context dropped or invalidated, reset it and retry once
+                print("Instantiating new SMTC manager...")
+                smtc_manager = await SMTC.request_async()
+                manager = smtc_manager
+                if not manager:
+                    return {"current_session_id": None, "sessions": []}
+                current_focused = manager.get_current_session()
+                all_sessions = manager.get_sessions()
+
             current_session_id = current_focused.source_app_user_model_id if current_focused else None
 
-            # We will also get all sessions, not just the current session.
-            # This will provide the client with all the necessary info if they want to target just
-            # one application.
-            all_sessions = manager.get_sessions()
+            # We will store all the session info in a list of dictionaries, which we will return as JSON
             sessions_list = []
 
             # We will not iterate over all the sessions, and grab all the available info
@@ -304,12 +327,8 @@ try:
                             import hashlib
                             img_hash = hashlib.md5(buffer).hexdigest()
                             
-                            # Track hashes in memory to avoid writing to disk if nothing changed
-                            if not hasattr(get_all_media_info, "cache"):
-                                get_all_media_info.cache = {}
-                            
                             # Check if we already processed this exact artwork for this app
-                            if get_all_media_info.cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
+                            if album_art_cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
                                 # Artwork hasn't changed, reuse existing file and version timestamp
                                 # print("Using cached artwork.")
                                 pass
@@ -324,13 +343,13 @@ try:
                                 img.save(
                                     thumb_path, 
                                     "JPEG", 
-                                    quality=40,          # Sweet spot for small size / high visual fidelity
+                                    quality=40,           # Sweet spot for small size / high visual fidelity
                                     subsampling=2,       # Faster compression algorithm for low-end CPUs
                                     optimize=False       # Skips the extra CPU pass
                                 )
                                 
                                 # Update cache hash
-                                get_all_media_info.cache[safe_app_id] = img_hash
+                                album_art_cache[safe_app_id] = img_hash
                             
                             # Use file modification time as the version token so browsers cache it aggressively
                             thumb_version = int(os.path.getmtime(thumb_path) * 1000)
@@ -354,12 +373,13 @@ try:
             # Build the final payload
             payload = {
                 "app_version": APP_VERSION,
+                "os": f"{platform.system()} {platform.release()}",
                 "current_session_id": current_session_id, 
                 "sessions": sessions_list
             }
             
             # Save to global payload cache
-            get_all_media_info.last_payload = payload
+            last_payload = payload
             return payload
 
         except Exception as e:
