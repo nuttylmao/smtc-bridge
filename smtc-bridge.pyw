@@ -367,6 +367,55 @@ try:
 
 
 
+    ########################
+    ### STARTUP SHORTCUT ###
+    ########################
+
+    def get_startup_shortcut_path():
+        # Gets the path to the current user's Startup folder
+        startup_dir = os.path.join(os.environ['APPDATA'], r'Microsoft\Windows\Start Menu\Programs\Startup')
+        return os.path.join(startup_dir, 'SMTCBridge.lnk')
+
+    def is_start_with_windows():
+        return os.path.exists(get_startup_shortcut_path())
+
+    def set_start_with_windows(enable: bool):
+        shortcut_path = get_startup_shortcut_path()
+        
+        if enable:
+            # Determine the correct path (handles both raw script and PyInstaller .exe)
+            if getattr(sys, 'frozen', False):
+                target_path = sys.executable
+                working_dir = os.path.dirname(sys.executable)
+            else:
+                target_path = sys.executable  # python.exe
+                working_dir = os.path.dirname(os.path.abspath(__file__))
+                # If running as script, you might want to point to the script instead, 
+                # but usually this feature is intended for the built .exe
+                
+            # Use a quick PowerShell command to create a proper Windows .lnk shortcut
+            # This avoids needing external libraries like winshell
+            script_args = f"""
+            $WshShell = New-Object -ComObject WScript.Shell
+            $Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
+            $Shortcut.TargetPath = '{target_path}'
+            $Shortcut.WorkingDirectory = '{working_dir}'
+            $Shortcut.Save()
+            """
+            import subprocess
+            subprocess.run(["powershell", "-Command", script_args], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            if os.path.exists(shortcut_path):
+                try:
+                    os.remove(shortcut_path)
+                except OSError:
+                    pass
+    
+    def toggle_startup(icon, item):
+        current_state = is_start_with_windows()
+        set_start_with_windows(not current_state)
+
+
     #################
     ### ENDPOINTS ###
     #################
@@ -445,6 +494,12 @@ try:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("★ Customize Overlay", lambda: webbrowser.open(f"https://widgets.nutty.gg/now-playing/settings/")),
             pystray.MenuItem("★ Try my stream widgets!", lambda: webbrowser.open(f"https://nutty.gg/collections/member-exclusive-widgets")),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Start with Windows", 
+                toggle_startup, 
+                checked=lambda item: is_start_with_windows()
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", on_quit)
         )
