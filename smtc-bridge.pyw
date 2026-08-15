@@ -168,13 +168,13 @@ try:
 
     async def get_all_media_info():            
         try:
-            # We will cache the last execution time and payload to avoid redundant parsing if requests flood in faster than 1 second.
+            # We will cache the last execution time and payload to avoid redundant parsing if requests flood in faster than 0.5 seconds.
             current_time = time.time()
             global smtc_manager, last_execution_time, last_payload, album_art_cache
 
-            # If requests flood in faster than 1 second, return the cached result 
+            # If requests flood in faster than 0.5 seconds, return the cached result 
             # to completely spare the CPU from redundant parsing.
-            if (current_time - last_execution_time) < 1.0 and last_payload:
+            if (current_time - last_execution_time) < 0.5 and last_payload:
                 # print("Using cached media info.")
                 return last_payload
             # else:
@@ -343,7 +343,7 @@ try:
                                 img.save(
                                     thumb_path, 
                                     "JPEG", 
-                                    quality=40,           # Sweet spot for small size / high visual fidelity
+                                    quality=80,          # Sweet spot for small size / high visual fidelity
                                     subsampling=2,       # Faster compression algorithm for low-end CPUs
                                     optimize=False       # Skips the extra CPU pass
                                 )
