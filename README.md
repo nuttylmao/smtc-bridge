@@ -8,7 +8,7 @@ Simply run the application, and a local web server will run in the background. B
 [http://127.0.0.1:5000/now-playing/](http://127.0.0.1:5000/now-playing/)
 
 A ready-to-use "Now Playing" widget utilizing SMTC Bridge is available to try here:<br>
-**[https://widgets.nutty.gg/now-playing/settings/](https://widgets.nutty.gg/now-playing/settings/)**
+**[IF YOU FOUND THIS PAGE EARLY, DON'T SHARE IT WITH ANYONE YET OR I'LL FUCKING CUM](https://widgets.nutty.gg/now-playing/settings/)**
 
 ## Quick Start
 1. Download the latest `.exe` from the [Releases page](releases).
