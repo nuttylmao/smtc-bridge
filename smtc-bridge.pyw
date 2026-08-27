@@ -1,5 +1,5 @@
 # Versioning
-APP_VERSION = "0.0.5"
+APP_VERSION = "0.0.6"
 DEVELOPER = "nutty"
 
 
@@ -64,6 +64,7 @@ try:
     import configparser
     import time
     import platform
+    import socket
     from PIL import Image
     from flask import Flask, jsonify
     from flask_cors import CORS
@@ -146,6 +147,18 @@ try:
     HOST = settings.get('SERVER', 'Host')
     PORT = settings.getint('SERVER', 'Port')
 
+    def get_local_ip():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
+    DISPLAY_HOST = get_local_ip() if HOST == "0.0.0.0" else HOST
+
     app = Flask(__name__)
     CORS(app)
 
@@ -164,13 +177,13 @@ try:
     smtc_manager = None
     last_execution_time = 0.0
     last_payload = None
-    album_art_cache = {}
+    thumb_cache = {}
 
     async def get_all_media_info():            
         try:
             # We will cache the last execution time and payload to avoid redundant parsing if requests flood in faster than 0.5 seconds.
             current_time = time.time()
-            global smtc_manager, last_execution_time, last_payload, album_art_cache
+            global smtc_manager, last_execution_time, last_payload, thumb_cache
 
             # If requests flood in faster than 0.5 seconds, return the cached result 
             # to completely spare the CPU from redundant parsing.
@@ -304,62 +317,43 @@ try:
                     "Thumbnail": None 
                 }
 
-                # Read and save thumbnail to a local temp file with byte-hashing cache
+                # Read thumbnail and convert straight to Base64
                 thumb_url = None
                 if raw_media and raw_media.thumbnail:
                     try:
                         stream_ref = raw_media.thumbnail
                         stream = await stream_ref.open_read_async()
 
-                        # Only proceed if there's actual data to read
                         if stream.size > 0:
                             reader = DataReader(stream.get_input_stream_at(0))
                             await reader.load_async(stream.size)
                             buffer = bytearray(stream.size)
                             reader.read_bytes(buffer)
                             
-                            # Generate a safe filename based on the app_id
-                            safe_app_id = "".join(c for c in app_id if c.isalnum() or c in ('_', '-'))
-                            thumb_filename = f"{safe_app_id}.jpg"
-                            thumb_path = os.path.join(THUMB_DIR, thumb_filename)
-                            
-                            # Hash the raw image bytes to check if the artwork actually changed
                             import hashlib
+                            import base64
+                            
+                            # Hash the raw bytes to see if the artwork is unique
                             img_hash = hashlib.md5(buffer).hexdigest()
                             
-                            # Check if we already processed this exact artwork for this app
-                            if album_art_cache.get(safe_app_id) == img_hash and os.path.exists(thumb_path):
-                                # Artwork hasn't changed, reuse existing file and version timestamp
-                                # print("Using cached artwork.")
-                                pass
+                            # If we've already processed this exact image bytes, grab it from cache instantly
+                            if img_hash in thumb_cache:
+                                thumb_url = thumb_cache[img_hash]
                             else:
                                 print(f"Processing new artwork for: {media_data['Artist']} - {media_data['Title']}")
-                                # Process and save with Pillow only when bytes actually change
-                                img = Image.open(io.BytesIO(buffer))
-                                if img.mode in ("RGBA", "P"):
-                                    img = img.convert("RGB")
-
-                                # Save at full resolution, but use faster compression settings
-                                img.save(
-                                    thumb_path, 
-                                    "JPEG", 
-                                    quality=80,          # Sweet spot for small size / high visual fidelity
-                                    subsampling=2,       # Faster compression algorithm for low-end CPUs
-                                    optimize=False       # Skips the extra CPU pass
-                                )
                                 
-                                # Update cache hash
-                                album_art_cache[safe_app_id] = img_hash
-                            
-                            # Use file modification time as the version token so browsers cache it aggressively
-                            thumb_version = int(os.path.getmtime(thumb_path) * 1000)
-                            
-                            # Construct the URL with the version query parameter
-                            thumb_url = f"http://{HOST}:{PORT}/artwork/{safe_app_id}?v={thumb_version}"
-                    except Exception:
+                                # Convert raw Windows bytes straight to Base64
+                                encoded_img = base64.b64encode(bytes(buffer)).decode('utf-8')
+                                thumb_url = f"data:image/jpeg;base64,{encoded_img}"
+                                
+                                # Store it in the cache so we never process it again for this track
+                                thumb_cache[img_hash] = thumb_url
+                                
+                    except Exception as e:
                         thumb_url = None
 
-                # Add the local URL to the payload
+                # Add the Base64 data string to the payload
+
                 media_data["Thumbnail"] = thumb_url
 
                 # Finally, assemble all the data into a session object, and add it to the session list
@@ -509,8 +503,8 @@ try:
         menu = pystray.Menu(
             pystray.MenuItem(f"SMTC Bridge v{APP_VERSION} by {DEVELOPER}", None, enabled=False),
             pystray.Menu.SEPARATOR,            
-            pystray.MenuItem("View Data (JSON)", lambda: webbrowser.open(f"http://{HOST}:{PORT}/now-playing")),
-            pystray.MenuItem("View Active Sessions", lambda: webbrowser.open(f"http://{HOST}:{PORT}/sessions")),
+            pystray.MenuItem("View Data (JSON)", lambda: webbrowser.open(f"http://{DISPLAY_HOST}:{PORT}/now-playing")),
+            pystray.MenuItem("View Active Sessions", lambda: webbrowser.open(f"http://{DISPLAY_HOST}:{PORT}/sessions")),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("★ Customize Overlay", lambda: webbrowser.open(f"https://widgets.nutty.gg/now-playing/settings/")),
             pystray.MenuItem("★ Try my stream widgets!", lambda: webbrowser.open(f"https://nutty.gg/collections/member-exclusive-widgets")),
