@@ -1,15 +1,43 @@
 # Versioning
-APP_VERSION = "0.0.6"
+APP_VERSION = "1.0.0"
 DEVELOPER = "nutty"
 
 
 
-# IMPORTANT SHIT STARTS HERE
+###############
+### IMPORTS ###
+###############
 
-import sys
-import traceback
-import os
 import datetime
+import traceback
+import asyncio
+import json
+import base64
+import threading
+import os
+import sys
+import psutil
+import tempfile
+import atexit
+import pystray
+import webbrowser
+import configparser
+import time
+import platform
+import socket
+import hashlib
+from PIL import Image
+from flask import Flask, jsonify
+from flask_cors import CORS
+from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as SMTC
+from winsdk.windows.storage.streams import DataReader
+from plyer import notification
+import winsdk._winrt as winrt
+from collections import OrderedDict
+
+
+
+# IMPORTANT SHIT STARTS HERE
 
 def log_crash(e):
     # 1. Ensure the 'logs' folder exists
@@ -44,37 +72,6 @@ def log_crash(e):
             pass # Ignore errors if file is locked or already gone
 
 try:
-
-    ###############
-    ### IMPORTS ###
-    ###############
-
-    import asyncio
-    import json
-    import base64
-    import io
-    import threading
-    import os
-    import sys
-    import psutil
-    import tempfile
-    import atexit
-    import pystray
-    import webbrowser
-    import configparser
-    import time
-    import platform
-    import socket
-    from PIL import Image
-    from flask import Flask, jsonify
-    from flask_cors import CORS
-    from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as SMTC
-    from winsdk.windows.storage.streams import DataReader
-    from plyer import notification
-    import winsdk._winrt as winrt
-
-
-
     #############################
     ### SINGLE INSTANCE CHECK ###
     #############################
@@ -177,7 +174,10 @@ try:
     smtc_manager = None
     last_execution_time = 0.0
     last_payload = None
-    thumb_cache = {}
+    
+    # Thumbnail cache to avoid reprocessing the same artwork repeatedly
+    MAX_CACHE_SIZE = 50               # Maximum number of unique thumbnails to cache
+    thumb_cache = OrderedDict()
 
     async def get_all_media_info():            
         try:
@@ -330,15 +330,14 @@ try:
                             buffer = bytearray(stream.size)
                             reader.read_bytes(buffer)
                             
-                            import hashlib
-                            import base64
-                            
                             # Hash the raw bytes to see if the artwork is unique
                             img_hash = hashlib.md5(buffer).hexdigest()
                             
                             # If we've already processed this exact image bytes, grab it from cache instantly
                             if img_hash in thumb_cache:
+                                thumb_cache.move_to_end(img_hash)
                                 thumb_url = thumb_cache[img_hash]
+                                # print(f"Using cached artwork for: {media_data['Artist']} - {media_data['Title']}")
                             else:
                                 print(f"Processing new artwork for: {media_data['Artist']} - {media_data['Title']}")
                                 
@@ -349,6 +348,11 @@ try:
                                 # Store it in the cache so we never process it again for this track
                                 thumb_cache[img_hash] = thumb_url
                                 
+                                # If the cache is full, remove the least recently used item
+                                if len(thumb_cache) > MAX_CACHE_SIZE:
+                                    thumb_cache.popitem(last=False)
+                                    print(f"Removed least recently used artwork from cache. Current cache size: {len(thumb_cache)}")
+
                     except Exception as e:
                         thumb_url = None
 
