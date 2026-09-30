@@ -16,7 +16,8 @@ import base64
 import threading
 import os
 import sys
-import psutil
+import ctypes
+from ctypes import wintypes
 import tempfile
 import atexit
 import pystray
@@ -77,33 +78,28 @@ try:
     #############################
 
     def is_already_running():
-        # Use the system temp directory
-        lockfile = os.path.join(tempfile.gettempdir(), 'smtc_bridge.lock')
-        
-        # Check if the lockfile already exists
-        if os.path.exists(lockfile):
-            try:
-                with open(lockfile, 'r') as f:
-                    pid = int(f.read())
-                # Check if that PID is actually still running
-                if psutil.pid_exists(pid):
-                    return True # A real instance is running
-                else:
-                    os.remove(lockfile) # Stale lock from a crash, clean it up
-            except (ValueError, PermissionError):
-                # If the file is garbled or we can't read it, treat it as a stale lock
-                os.remove(lockfile)
-                
-        # No instance found, write our PID to the lockfile
-        try:
-            with open(lockfile, 'w') as f:
-                f.write(str(os.getpid()))
-        except IOError:
-            pass # Could not write lockfile, but let's proceed anyway
-            
-        # Register a cleanup function to delete the file when the app closes
-        atexit.register(lambda: os.remove(lockfile) if os.path.exists(lockfile) else None)
-        
+        # A session-local mutex is created atomically and cannot survive a crash
+        # or shutdown. Old PID lockfiles are deliberately ignored.
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        error_already_exists = 183
+        mutex = kernel32.CreateMutexW(None, False, r'Local\SMTC-Bridge')
+        error = ctypes.get_last_error()
+        if not mutex:
+            raise ctypes.WinError(error)
+
+        if error == error_already_exists:
+            kernel32.CloseHandle(mutex)
+            return True
+
+        # Keep the handle open for the lifetime of this process. Windows also
+        # closes it on forced termination, including the tray's os._exit().
+        atexit.register(kernel32.CloseHandle, mutex)
+
         return False
 
     if is_already_running():
