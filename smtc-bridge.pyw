@@ -1,5 +1,5 @@
 # Versioning
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 DEVELOPER = "nutty"
 
 
@@ -77,37 +77,23 @@ try:
     #############################
 
     def is_already_running():
-        # Use the system temp directory
-        lockfile = os.path.join(tempfile.gettempdir(), 'smtc_bridge.lock')
+        import ctypes
+        mutex_name = f"Global\\SMTCBridge_{APP_VERSION}_{DEVELOPER}"
+        kernel32 = ctypes.windll.kernel32
         
-        # Check if the lockfile already exists
-        if os.path.exists(lockfile):
-            try:
-                with open(lockfile, 'r') as f:
-                    pid = int(f.read())
-                # Check if that PID is actually still running
-                if psutil.pid_exists(pid):
-                    return True # A real instance is running
-                else:
-                    os.remove(lockfile) # Stale lock from a crash, clean it up
-            except (ValueError, PermissionError):
-                # If the file is garbled or we can't read it, treat it as a stale lock
-                os.remove(lockfile)
-                
-        # No instance found, write our PID to the lockfile
-        try:
-            with open(lockfile, 'w') as f:
-                f.write(str(os.getpid()))
-        except IOError:
-            pass # Could not write lockfile, but let's proceed anyway
-            
-        # Register a cleanup function to delete the file when the app closes
-        atexit.register(lambda: os.remove(lockfile) if os.path.exists(lockfile) else None)
+        # Store handle globally or in a way that prevents garbage collection
+        is_already_running.h_mutex = kernel32.CreateMutexW(None, False, mutex_name)
         
+        # ERROR_ALREADY_EXISTS = 183
+        if kernel32.GetLastError() == 183:
+            if is_already_running.h_mutex:
+                kernel32.CloseHandle(is_already_running.h_mutex)
+            return True
         return False
 
     if is_already_running():
         print("Another instance is already running. Exiting...")
+        log_crash("Another instance is already running. Exiting...")
         sys.exit()
 
 
